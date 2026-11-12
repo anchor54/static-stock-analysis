@@ -103,6 +103,13 @@ stock picker, or `503` when the list is unavailable.
   prices; a cold 50-stock scan measured 2.6 s. If intraday data is missing, the row still shows,
   with `vwap: null` and a warning. Price sources can provide intraday bars by implementing the
   optional `provider.IntradayProvider` interface.
+- **Fundamentals columns (not in the doc).** `fcf` and `net_cash` hold the latest financial
+  year's free cash flow and net change in cash in ₹ crore, from Yahoo's fundamentals time series
+  (`fcf_prev` and `net_cash_prev` hold the year before). `fii_chg` and `dii_chg` are the
+  quarter-on-quarter change, in percentage points, of the "Institutions (Foreign)" and
+  "Institutions (Domestic)" totals in the two latest shareholding-pattern XBRL filings on NSE
+  (`internal/fundamentals`). Results are cached for 12 hours, and a source that fails adds a row
+  warning. FII/DII data is available for NSE tickers only.
 - **Not supported:** numeric BSE codes such as `500325.BO`, because Yahoo serves no data for them.
   They show up as skipped. Use `RELIANCE.BO`-style tickers instead.
 

@@ -319,6 +319,14 @@ export function App() {
           <b>Stage</b> 30-week SMA of weekly closes and its 4-week slope (±1% is flat); 5% band for pullbacks and bounces. Hover for the
           reasoning.
         </p>
+        <p>
+          <b>Cash flow</b> latest financial year from the annual cash flow statement (Yahoo Finance), in ₹ crore. FCF = operating cash
+          flow − capital expenditure; Net = net change in cash and equivalents. Hover for the year before.
+        </p>
+        <p>
+          <b>Holding Δ Q/Q</b> change in FII (foreign institutions: FPIs and FDI) and DII (domestic institutions) holding between the two
+          latest quarterly shareholding patterns filed with NSE, in percentage points. Hover for both quarters' holdings.
+        </p>
       </div>
     </main>
   );

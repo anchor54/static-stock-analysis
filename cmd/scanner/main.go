@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"stockscanner/internal/api"
+	"stockscanner/internal/fundamentals"
 	"stockscanner/internal/provider"
 	"stockscanner/internal/scanner"
 	"stockscanner/internal/symbols"
@@ -41,9 +42,10 @@ func main() {
 
 	srv := &api.Server{
 		Scanner: &scanner.Scanner{
-			Provider: provider.NewCached(provider.NewYahoo(), *cacheTTL),
-			Symbols:  symbols.NewSource(*dataDir),
-			Config:   cfg,
+			Provider:     provider.NewCached(provider.NewYahoo(), *cacheTTL),
+			Symbols:      symbols.NewSource(*dataDir),
+			Fundamentals: fundamentals.New(),
+			Config:       cfg,
 		},
 		Static: web.Static(),
 	}

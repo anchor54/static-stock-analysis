@@ -37,6 +37,22 @@ export type Row = {
   vwap_dist: number | null;
   vwap_date: string;
   stage: Stage | null;
+  /** Annual cash flows in ₹ crore for the financial year ending `…_fy`, and the year before. */
+  fcf: number | null;
+  fcf_prev: number | null;
+  fcf_fy: string;
+  net_cash: number | null;
+  net_cash_prev: number | null;
+  net_cash_fy: string;
+  /** FII and DII holdings in % at the latest quarter end and the one before; `…_chg` is the change in percentage points. */
+  fii: number | null;
+  fii_prev: number | null;
+  fii_chg: number | null;
+  dii: number | null;
+  dii_prev: number | null;
+  dii_chg: number | null;
+  shp_quarter: string;
+  shp_prev_quarter: string;
   warnings: string[];
   note: string;
   match: string;

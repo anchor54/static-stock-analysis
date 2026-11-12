@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"stockscanner/internal/fundamentals"
 	"stockscanner/internal/indicators"
 	"stockscanner/internal/provider"
 	"stockscanner/internal/symbols"
@@ -19,6 +20,16 @@ import (
 type SymbolSource interface {
 	Get(ctx context.Context) (*symbols.List, error)
 }
+
+// FundamentalsSource supplies cash flow and shareholding data by Yahoo ticker.
+// It never fails as a whole; per-stock problems are in each Data's Notes.
+type FundamentalsSource interface {
+	Get(ctx context.Context, tickers []string) map[string]fundamentals.Data
+}
+
+// fundamentalsTimeout caps how long a scan waits for fundamentals, so a slow
+// filing source never holds up the price columns for long.
+const fundamentalsTimeout = 45 * time.Second
 
 // Config holds indicator parameters.
 type Config struct {
@@ -48,8 +59,10 @@ func DefaultConfig() Config {
 type Scanner struct {
 	Provider provider.Provider
 	Symbols  SymbolSource
-	Config   Config
-	Now      func() time.Time
+	// Fundamentals is optional; without it the fundamentals columns are empty.
+	Fundamentals FundamentalsSource
+	Config       Config
+	Now          func() time.Time
 }
 
 // InputError is a problem with the request itself (HTTP 400).
@@ -129,11 +142,31 @@ type Row struct {
 	VWAPDist Num    `json:"vwap_dist"`
 	VWAPDate string `json:"vwap_date"`
 
-	Stage      *indicators.Stage `json:"stage"`
-	Warnings   []string          `json:"warnings"`
-	Note       string            `json:"note"`
-	Method     string            `json:"match"`
-	Candidates []string          `json:"candidates"`
+	Stage *indicators.Stage `json:"stage"`
+
+	// Annual cash flows in ₹ crore for the financial year ending …_fy, and the year before.
+	FCF         Num    `json:"fcf"`
+	FCFPrev     Num    `json:"fcf_prev"`
+	FCFFY       string `json:"fcf_fy"`
+	NetCash     Num    `json:"net_cash"`
+	NetCashPrev Num    `json:"net_cash_prev"`
+	NetCashFY   string `json:"net_cash_fy"`
+
+	// FII and DII holdings in % at the latest quarter end and the one before;
+	// …Chg is the change in percentage points.
+	FII        Num    `json:"fii"`
+	FIIPrev    Num    `json:"fii_prev"`
+	FIIChg     Num    `json:"fii_chg"`
+	DII        Num    `json:"dii"`
+	DIIPrev    Num    `json:"dii_prev"`
+	DIIChg     Num    `json:"dii_chg"`
+	SHPQuarter string `json:"shp_quarter"`
+	SHPPrev    string `json:"shp_prev_quarter"`
+
+	Warnings   []string `json:"warnings"`
+	Note       string   `json:"note"`
+	Method     string   `json:"match"`
+	Candidates []string `json:"candidates"`
 }
 
 const dateFmt = "2006-01-02"
@@ -185,6 +218,22 @@ func (s *Scanner) Analyze(ctx context.Context, entries []string) (*Result, error
 			tickers = append(tickers, m.Ticker)
 		}
 	}
+	// Fundamentals download alongside prices.
+	fundCh := make(chan map[string]fundamentals.Data, 1)
+	if s.Fundamentals != nil && len(matches) > 0 {
+		stockTickers := make([]string, len(matches))
+		for i, m := range matches {
+			stockTickers[i] = m.Ticker
+		}
+		go func() {
+			fctx, cancel := context.WithTimeout(ctx, fundamentalsTimeout)
+			defer cancel()
+			fundCh <- s.Fundamentals.Get(fctx, stockTickers)
+		}()
+	} else {
+		fundCh <- nil
+	}
+
 	series, errs := s.Provider.History(ctx, tickers)
 	bench, ok := series[cfg.Benchmark]
 	if !ok || len(bench.Bars) == 0 {
@@ -213,6 +262,7 @@ func (s *Scanner) Analyze(ctx context.Context, entries []string) (*Result, error
 		}
 		intra, intraErrs = ip.Intraday(ctx, stockTickers)
 	}
+	fund := <-fundCh
 
 	for _, m := range matches {
 		sr, ok := series[m.Ticker]
@@ -230,6 +280,9 @@ func (s *Scanner) Analyze(ctx context.Context, entries []string) (*Result, error
 			res.Problems = append(res.Problems, Problem{m.Query, err.Error()})
 			continue
 		}
+		if fund != nil {
+			applyFundamentals(&row, fund[m.Ticker])
+		}
 		res.Rows = append(res.Rows, row)
 	}
 
@@ -239,6 +292,16 @@ func (s *Scanner) Analyze(ctx context.Context, entries []string) (*Result, error
 	}
 	res.GeneratedAt = now().UTC()
 	return res, nil
+}
+
+// applyFundamentals copies one stock's fundamentals into its row.
+func applyFundamentals(row *Row, d fundamentals.Data) {
+	row.FCF, row.FCFPrev, row.FCFFY = Num(d.FCF), Num(d.FCFPrev), d.FCFYear
+	row.NetCash, row.NetCashPrev, row.NetCashFY = Num(d.NetCash), Num(d.NetCashPrev), d.NetCashYear
+	row.FII, row.FIIPrev, row.FIIChg = Num(d.FII), Num(d.FIIPrev), Num(d.FII-d.FIIPrev)
+	row.DII, row.DIIPrev, row.DIIChg = Num(d.DII), Num(d.DIIPrev), Num(d.DII-d.DIIPrev)
+	row.SHPQuarter, row.SHPPrev = d.Quarter, d.PrevQuarter
+	row.Warnings = append(row.Warnings, d.Notes...)
 }
 
 // missingSessions lists benchmark dates among the last `window` sessions that
@@ -318,6 +381,9 @@ func (s *Scanner) computeRow(m symbols.Match, sr provider.Series, bench provider
 		Candidates: m.Candidates,
 		Warnings:   []string{},
 	}
+	nan := Num(math.NaN())
+	row.FCF, row.FCFPrev, row.NetCash, row.NetCashPrev = nan, nan, nan, nan
+	row.FII, row.FIIPrev, row.FIIChg, row.DII, row.DIIPrev, row.DIIChg = nan, nan, nan, nan, nan, nan
 	if row.Candidates == nil {
 		row.Candidates = []string{}
 	}
