@@ -1,0 +1,15 @@
+{
+  "name": "stock-scanner",
+  "private": true,
+  "description": "Runs the Go backend and the React front end together.",
+  "scripts": {
+    "postinstall": "npm --prefix frontend install",
+    "start": "npm --prefix frontend run build && go run ./cmd/scanner",
+    "dev": "concurrently --kill-others --names api,web --prefix-colors blue,green \"go run ./cmd/scanner\" \"npm --prefix frontend run dev\"",
+    "build": "npm --prefix frontend run build && go build ./cmd/scanner",
+    "test": "go test ./... && npm --prefix frontend run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}
