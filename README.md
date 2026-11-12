@@ -24,6 +24,17 @@ Then, from the project root:
 The built binary needs neither Go nor Node; double-click `scanner.exe` and open http://127.0.0.1:8000.
 Without Node, `go run ./cmd/scanner` also works, using the checked-in `web/dist`.
 
+## Deploy (Render + GitHub Actions)
+
+`.github/workflows/ci-deploy.yml` runs on every push and pull request. It type-checks and builds
+the front end, runs `go vet` and `go test`, and builds the Docker image. On `main`, once all of
+that passes, it triggers a Render deploy through the deploy hook stored in the
+`RENDER_DEPLOY_HOOK_URL` repository secret.
+
+On Render the server listens on `0.0.0.0:$PORT`. Locally, with no `PORT` set, it still uses
+`127.0.0.1:8000`. The `Dockerfile` builds the front end and the Go binary from source. Render
+storage is temporary, so the NSE symbol list is downloaded again after each restart.
+
 ## Front end
 
 React 19 + TypeScript, built with Vite, in `frontend/`. Requires Node 20+.

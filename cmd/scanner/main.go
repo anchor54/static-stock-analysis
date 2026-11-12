@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"stockscanner/internal/api"
@@ -17,7 +18,12 @@ import (
 
 func main() {
 	cfg := scanner.DefaultConfig()
-	addr := flag.String("addr", "127.0.0.1:8000", "listen address")
+	defaultAddr := "127.0.0.1:8000"
+	if port := os.Getenv("PORT"); port != "" {
+		// Hosted (e.g. Render): listen on all interfaces on the given port.
+		defaultAddr = "0.0.0.0:" + port
+	}
+	addr := flag.String("addr", defaultAddr, "listen address (defaults to 0.0.0.0:$PORT when PORT is set)")
 	dataDir := flag.String("data", "data", "directory for the cached NSE symbol list")
 	cacheTTL := flag.Duration("cache-ttl", 15*time.Minute, "how long downloaded prices are reused")
 	flag.StringVar(&cfg.Benchmark, "benchmark", cfg.Benchmark, "Yahoo ticker of the benchmark index")
