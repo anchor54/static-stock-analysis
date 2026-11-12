@@ -109,7 +109,19 @@ stock picker, or `503` when the list is unavailable.
   quarter-on-quarter change, in percentage points, of the "Institutions (Foreign)" and
   "Institutions (Domestic)" totals in the two latest shareholding-pattern XBRL filings on NSE
   (`internal/fundamentals`). Results are cached for 12 hours, and a source that fails adds a row
-  warning. FII/DII data is available for NSE tickers only.
+  warning. FII/DII data is available for NSE tickers only. Cash flows that Yahoo reports in
+  another currency (e.g. Infosys, in USD) are converted to rupees at the current rate.
+- **FII/DII snapshot.** NSE blocks most cloud servers, including Render, so the server embeds
+  a saved copy of every NSE stock's holdings (`internal/fundamentals/holdings.json`). It uses
+  that copy when NSE refuses a live request, and the cell's tooltip shows the snapshot date.
+  Refresh the copy from your own computer about once a quarter, after companies file their
+  shareholding pattern (by the 21st of January, April, July and October), then commit and push
+  it:
+
+  ```sh
+  npm run refresh-holdings                         # every NSE stock; reruns skip stocks with no new quarter
+  go run ./cmd/holdings -symbols RELIANCE,TCS      # only these stocks
+  ```
 - **Not supported:** numeric BSE codes such as `500325.BO`, because Yahoo serves no data for them.
   They show up as skipped. Use `RELIANCE.BO`-style tickers instead.
 

@@ -40,11 +40,15 @@ func main() {
 		log.Fatal("stage-ma-weeks and stage-slope-weeks must be at least 1")
 	}
 
+	fund := fundamentals.New()
+	// Used when NSE blocks live requests, as it does on most cloud hosts.
+	fund.Snapshot = fundamentals.Embedded()
+
 	srv := &api.Server{
 		Scanner: &scanner.Scanner{
 			Provider:     provider.NewCached(provider.NewYahoo(), *cacheTTL),
 			Symbols:      symbols.NewSource(*dataDir),
-			Fundamentals: fundamentals.New(),
+			Fundamentals: fund,
 			Config:       cfg,
 		},
 		Static: web.Static(),

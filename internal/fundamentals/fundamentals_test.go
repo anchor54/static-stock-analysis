@@ -53,13 +53,18 @@ func TestParseHolding(t *testing.T) {
 	if math.Abs(h.fii-16.67) > 1e-9 || math.Abs(h.dii-21.72) > 1e-9 {
 		t.Errorf("got FII %v DII %v; want 16.67, 21.72", h.fii, h.dii)
 	}
+	// A small company with no institutional investors files only the public total.
+	none := `<in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares contextRef="PublicShareholding_ContextI" decimals="INF" unitRef="pure">0.2689</in-bse-shp:ShareholdingAsAPercentageOfTotalNumberOfShares>`
+	if h, err := parseHolding([]byte(none)); err != nil || h.fii != 0 || h.dii != 0 {
+		t.Errorf("no institutions: got %+v, %v; want 0, 0", h, err)
+	}
 	if _, err := parseHolding([]byte("<x/>")); err == nil {
 		t.Error("want an error for a filing without totals")
 	}
 }
 
 func TestLatestQuartersPrefersRevision(t *testing.T) {
-	got := latestQuarters([]filing{
+	got := latestQuarters([]Filing{
 		{Date: "30-JUN-2026", Broadcast: "16-JUL-2026 07:24:34", XBRL: "http://x/jun"},
 		{Date: "30-SEP-2026", Broadcast: "21-OCT-2026 16:25:15", XBRL: "http://x/sep"},
 		{Date: "30-SEP-2026", Broadcast: "25-OCT-2026 10:00:00", XBRL: "http://x/sep-revised"},
@@ -118,5 +123,84 @@ func TestGetEndToEnd(t *testing.T) {
 	s.Get(context.Background(), []string{"M&M.NS"})
 	if nseCalls.Load() != before {
 		t.Error("second Get hit NSE again; want the cached result")
+	}
+}
+
+func TestSnapshotFallbackWhenNSEBlocks(t *testing.T) {
+	var nseCalls atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/fundamentals-timeseries/v1/finance/timeseries/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, timeseriesJSON)
+	})
+	mux.HandleFunc("/api/corporate-share-holdings-master", func(w http.ResponseWriter, r *http.Request) {
+		nseCalls.Add(1)
+		http.Error(w, "Access Denied", http.StatusForbidden)
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) { http.Error(w, "Access Denied", http.StatusForbidden) })
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	snap, err := ParseSnapshot([]byte(`{"generated_at":"2026-11-12","stocks":{
+		"RELIANCE":{"q":"2026-09-30","fii":16.67,"dii":21.72,"pq":"2026-06-30","pfii":17.2,"pdii":21.19}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New()
+	s.YahooURL, s.NSEURL, s.Snapshot, s.Concurrency = srv.URL, srv.URL, snap, 1
+	got := s.Get(context.Background(), []string{"RELIANCE.NS", "TCS.NS"})
+
+	r := got["RELIANCE.NS"]
+	if len(r.Notes) != 0 || r.HoldingSource != "snapshot of 2026-11-12" || math.Abs(r.FII-r.FIIPrev+0.53) > 1e-9 {
+		t.Errorf("RELIANCE: %+v", r)
+	}
+	tcs := got["TCS.NS"]
+	if !math.IsNaN(tcs.FII) || len(tcs.Notes) != 1 || !strings.Contains(tcs.Notes[0], "refresh-holdings") {
+		t.Errorf("TCS: %+v", tcs)
+	}
+	// After the first refusal NSE is skipped, so only the first stock asked it (plus one cookie retry).
+	if n := nseCalls.Load(); n > 2 {
+		t.Errorf("NSE asked %d times; want at most 2", n)
+	}
+}
+
+func TestCashFlowInDollarsIsConverted(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ws/fundamentals-timeseries/v1/finance/timeseries/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"timeseries":{"result":[{"meta":{"type":["annualFreeCashFlow"]},
+			"annualFreeCashFlow":[{"asOfDate":"2026-03-31","currencyCode":"USD","reportedValue":{"raw":3.733E9}}]}]}}`)
+	})
+	mux.HandleFunc("/v8/finance/chart/USDINR=X", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"chart":{"result":[{"meta":{"regularMarketPrice":85}}]}}`)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	s := New()
+	s.YahooURL = srv.URL
+	d := empty()
+	if err := s.cashFlow(context.Background(), "INFY.NS", &d); err != nil {
+		t.Fatal(err)
+	}
+	if math.Abs(d.FCF-373.3*85) > 1e-6 || !strings.Contains(d.CashNote, "USD") {
+		t.Errorf("FCF %v, note %q; want %v ₹ Cr and a USD note", d.FCF, d.CashNote, 373.3*85)
+	}
+}
+
+func TestSnapshotSaveRoundTrip(t *testing.T) {
+	path := t.TempDir() + "/h.json"
+	s := &Snapshot{GeneratedAt: "2026-11-12", Stocks: map[string]SnapEntry{
+		"M&M":      EntryOf(Holding{Quarter: "2026-09-30", FII: 33.354, DII: 34.24, FIIPrev: math.NaN(), DIIPrev: 32.65}),
+		"RELIANCE": EntryOf(Holding{Quarter: "2026-09-30", FII: 16.67, DII: 21.72}),
+	}}
+	if err := s.Save(path); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadSnapshot(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h, ok := got.Lookup("m&m")
+	if !ok || h.FII != 33.35 || !math.IsNaN(h.FIIPrev) || h.DIIPrev != 32.65 || got.Date() != "2026-11-12" {
+		t.Errorf("round trip: %+v ok=%v", h, ok)
 	}
 }

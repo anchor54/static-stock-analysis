@@ -151,6 +151,7 @@ type Row struct {
 	NetCash     Num    `json:"net_cash"`
 	NetCashPrev Num    `json:"net_cash_prev"`
 	NetCashFY   string `json:"net_cash_fy"`
+	CashNote    string `json:"cash_note"`
 
 	// FII and DII holdings in % at the latest quarter end and the one before;
 	// …Chg is the change in percentage points.
@@ -162,6 +163,7 @@ type Row struct {
 	DIIChg     Num    `json:"dii_chg"`
 	SHPQuarter string `json:"shp_quarter"`
 	SHPPrev    string `json:"shp_prev_quarter"`
+	SHPSource  string `json:"shp_source"`
 
 	Warnings   []string `json:"warnings"`
 	Note       string   `json:"note"`
@@ -300,7 +302,8 @@ func applyFundamentals(row *Row, d fundamentals.Data) {
 	row.NetCash, row.NetCashPrev, row.NetCashFY = Num(d.NetCash), Num(d.NetCashPrev), d.NetCashYear
 	row.FII, row.FIIPrev, row.FIIChg = Num(d.FII), Num(d.FIIPrev), Num(d.FII-d.FIIPrev)
 	row.DII, row.DIIPrev, row.DIIChg = Num(d.DII), Num(d.DIIPrev), Num(d.DII-d.DIIPrev)
-	row.SHPQuarter, row.SHPPrev = d.Quarter, d.PrevQuarter
+	row.SHPQuarter, row.SHPPrev, row.SHPSource = d.Quarter, d.PrevQuarter, d.HoldingSource
+	row.CashNote = d.CashNote
 	row.Warnings = append(row.Warnings, d.Notes...)
 }
 

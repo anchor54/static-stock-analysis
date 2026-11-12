@@ -87,14 +87,23 @@ function pivotCell(r: Row, k: PivotKey, long: string, m: ViewModes): Cell {
 }
 
 /** An annual cash flow in ₹ crore: green when positive, red when negative; hover compares with the year before. */
-function cashCell(v: number | null, prev: number | null, date: string, what: string): Cell {
+function cashCell(v: number | null, prev: number | null, date: string, what: string, note: string): Cell {
   if (!isNum(v)) return { content: '–', className: 'missing', title: `${what} unavailable; see the ⚠ note` };
   const lines = [`${what} ${fy(date)}: ₹${crore(v)} Cr`];
   if (isNum(prev)) {
     const growth = prev > 0 ? ` (${pct((v / prev - 1) * 100)})` : '';
     lines.push(`Year before: ₹${crore(prev)} Cr${growth}`);
   }
+  if (note) lines.push(note);
   return { content: crore(v), className: dirClass(v), title: lines.join('\n') };
+}
+
+/** Where the holdings came from, when not live from NSE. */
+function sourceNote(source: string) {
+  if (!source || source === 'NSE') return '';
+  const date = source.replace(/^snapshot of /, '');
+  return `
+From the saved snapshot of ${fmtDate(date)} (NSE can't be reached from this server)`;
 }
 
 /** Change in an investor group's holding over the last quarter, in percentage points. */
@@ -108,7 +117,7 @@ function holdingCell(r: Row, who: 'FII' | 'DII'): Cell {
   return {
     content: signed(chg, 2),
     className: dirClass(chg),
-    title: `${long}\n${quarter(r.shp_quarter)}: ${num(now)}%\n${quarter(r.shp_prev_quarter)}: ${num(before)}%\nChange: ${signed(chg, 2)} percentage points`,
+    title: `${long}\n${quarter(r.shp_quarter)}: ${num(now)}%\n${quarter(r.shp_prev_quarter)}: ${num(before)}%\nChange: ${signed(chg, 2)} percentage points${sourceNote(r.shp_source)}`,
   };
 }
 
@@ -224,14 +233,14 @@ export const COLUMNS: Column[] = [
     group: 'Cash flow (₹ Cr)',
     label: 'FCF',
     value: (r) => r.fcf,
-    cell: (r) => cashCell(r.fcf, r.fcf_prev, r.fcf_fy, 'Free cash flow'),
+    cell: (r) => cashCell(r.fcf, r.fcf_prev, r.fcf_fy, 'Free cash flow', r.cash_note),
   },
   {
     id: 'net_cash',
     group: 'Cash flow (₹ Cr)',
     label: 'Net',
     value: (r) => r.net_cash,
-    cell: (r) => cashCell(r.net_cash, r.net_cash_prev, r.net_cash_fy, 'Net cash flow'),
+    cell: (r) => cashCell(r.net_cash, r.net_cash_prev, r.net_cash_fy, 'Net cash flow', r.cash_note),
   },
   { id: 'fii_chg', group: 'Holding Δ Q/Q (pp)', label: 'FII', value: (r) => r.fii_chg, cell: (r) => holdingCell(r, 'FII') },
   { id: 'dii_chg', group: 'Holding Δ Q/Q (pp)', label: 'DII', value: (r) => r.dii_chg, cell: (r) => holdingCell(r, 'DII') },

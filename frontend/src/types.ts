@@ -44,6 +44,8 @@ export type Row = {
   net_cash: number | null;
   net_cash_prev: number | null;
   net_cash_fy: string;
+  /** Set when Yahoo reports in another currency and the values were converted to rupees. */
+  cash_note: string;
   /** FII and DII holdings in % at the latest quarter end and the one before; `…_chg` is the change in percentage points. */
   fii: number | null;
   fii_prev: number | null;
@@ -53,6 +55,8 @@ export type Row = {
   dii_chg: number | null;
   shp_quarter: string;
   shp_prev_quarter: string;
+  /** "NSE" when fetched live, or "snapshot of YYYY-MM-DD" from the saved file. */
+  shp_source: string;
   warnings: string[];
   note: string;
   match: string;
