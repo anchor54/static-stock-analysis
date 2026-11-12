@@ -102,6 +102,24 @@ export function tableForExcel(table: HTMLTableElement, title: string): { html: s
   return { html, text: tsv.join('\n') };
 }
 
+/** Puts plain text on the clipboard. */
+export async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  // No Clipboard API (a page that isn't secure): copy from a hidden text box instead.
+  const box = document.createElement('textarea');
+  box.value = text;
+  box.setAttribute('readonly', '');
+  box.style.cssText = 'position:fixed;left:-9999px;top:0';
+  document.body.append(box);
+  box.select();
+  const ok = document.execCommand('copy');
+  box.remove();
+  if (!ok) throw new Error('The browser blocked copying to the clipboard.');
+}
+
 /** Puts the table on the clipboard as HTML, with plain text for apps that can't take HTML. */
 export async function copyForExcel(table: HTMLTableElement, title: string): Promise<void> {
   const { html, text } = tableForExcel(table, title);

@@ -10,6 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchSymbols } from '../api';
+import { copyText } from '../copyTable';
 import { cx, splitEntries } from '../format';
 
 interface Indexed {
@@ -294,6 +295,21 @@ export function StockSelect({ selected, onChange, onSubmit, max, resetKey }: Pro
         </span>
         {listStatus && <span>· {listStatus}</span>}
         <span aria-live="polite">{message && `· ${message}`}</span>
+        {selected.length > 0 && (
+          <button
+            type="button"
+            className="link"
+            title="Copy all selected stocks, separated by commas"
+            onClick={() => {
+              copyText(selected.join(', ')).then(
+                () => setMessage(selected.length === 1 ? `Copied ${selected[0]}` : `Copied ${selected.length} stocks`),
+                () => setMessage("Couldn't copy: the browser blocked the clipboard"),
+              );
+            }}
+          >
+            Copy all
+          </button>
+        )}
         {selected.length > 0 && (
           <button
             type="button"

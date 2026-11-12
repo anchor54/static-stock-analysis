@@ -179,7 +179,7 @@ thead th:hover .col-resize::after { background: var(--border); }
 /* Pinned Symbol column: stays put while scrolling sideways. */
 th.pin, td.pin { position: sticky; left: 0; box-shadow: inset -1px 0 var(--border); }
 /* Room on the right for the row's remove button, so symbols line up with the header. */
-thead tr.cols th.pin, td.pin { padding-right: 30px; }
+thead tr.cols th.pin, td.pin { padding-right: 52px; }
 th.pin { z-index: 2; }
 td.pin { z-index: 1; background: var(--panel); }
 tbody tr:hover td { background: var(--hover); }
@@ -213,6 +213,15 @@ tr.pending.bad td { color: var(--down); }
 .row-del:hover { background: var(--down-bg); color: var(--down); }
 tbody tr:hover .row-del, .row-del:focus-visible { visibility: visible; }
 @media (hover: none) { .row-del { visibility: visible; } }
+/* Copy-symbol button, just left of the remove button; shown the same way. */
+.row-copy {
+  position: absolute; right: 26px; top: 50%; transform: translateY(-50%); display: inline-flex; padding: 3px; border: 0; border-radius: 4px;
+  background: none; color: var(--muted); visibility: hidden;
+}
+.row-copy:hover { background: var(--hover); color: var(--text); }
+.row-copy.done { color: var(--up); visibility: visible; }
+tbody tr:hover .row-copy, .row-copy:focus-visible { visibility: visible; }
+@media (hover: none) { .row-copy { visibility: visible; } }
 /* Hide-column button in each header: shown on header hover or keyboard focus. */
 .col-hide {
   flex-shrink: 0; display: inline-flex; vertical-align: -2px; margin: -2px -4px -2px 2px; padding: 2px; border: 0; border-radius: 4px;

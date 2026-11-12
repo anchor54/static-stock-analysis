@@ -1,5 +1,6 @@
-import { useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode, type Ref } from 'react';
 import type { Column, SortState, ViewModes } from '../columns';
+import { copyText } from '../copyTable';
 import { cx } from '../format';
 import type { Row } from '../types';
 
@@ -96,6 +97,44 @@ function ResizeHandle({ label, width, onResize }: { label: string; width?: numbe
         onResize(clampWidth(start + (e.key === 'ArrowRight' ? 10 : -10)));
       }}
     />
+  );
+}
+
+/** Copies one stock's symbol; shows a tick for a moment once copied. */
+function CopyButton({ text }: { text: string }) {
+  const [state, setState] = useState<'idle' | 'done' | 'failed'>('idle');
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const label = state === 'done' ? `Copied ${text}` : state === 'failed' ? `Couldn't copy ${text}` : `Copy ${text}`;
+  return (
+    <button
+      type="button"
+      className={cx('row-copy', state === 'done' && 'done')}
+      aria-label={label}
+      title={label}
+      onClick={() => {
+        copyText(text).then(
+          () => setState('done'),
+          () => setState('failed'),
+        );
+        clearTimeout(timer.current);
+        timer.current = setTimeout(() => setState('idle'), 1500);
+      }}
+    >
+      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+        {state === 'done' ? (
+          <path d="M3 8.5l3 3 7-7" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <path
+            d="M5.5 5.5V3.5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M3.5 5.5h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+        )}
+      </svg>
+    </button>
   );
 }
 
@@ -216,7 +255,12 @@ export function ResultsTable({ tableRef, columns, rows, pending, sort, modes, on
                     title={cell.title}
                     className={cx(c.align === 'left' && 'left', pin(i), c.className, cell.className, startsGroup(i) && 'grp-start')}
                   >
-                    {i === 0 && <RemoveButton label={r.symbol} onClick={() => onRemove(r.query)} />}
+                    {i === 0 && (
+                      <>
+                        <CopyButton text={r.symbol} />
+                        <RemoveButton label={r.symbol} onClick={() => onRemove(r.query)} />
+                      </>
+                    )}
                     <Fit width={widths[c.id]}>{cell.content}</Fit>
                   </td>
                 );
@@ -226,6 +270,7 @@ export function ResultsTable({ tableRef, columns, rows, pending, sort, modes, on
           {pending.map((p) => (
             <tr key={`pending:${p.entry.toUpperCase()}`} className={cx('pending', p.reason && 'bad')}>
               <td className="left pin sym">
+                <CopyButton text={p.entry} />
                 <RemoveButton label={p.entry} onClick={() => onRemove(p.entry)} />
                 <Fit width={widths[columns[0].id]}>{p.entry}</Fit>
               </td>
